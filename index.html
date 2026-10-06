@@ -651,10 +651,10 @@ html,body{width:100%;height:100%;background:#020005;color:#f0d0e8;font-family:'R
       <div id="enemySelectTitle">📁 敵フォルダを選択 📁</div>
       <button id="folderSelectButton">📁 フォルダを選択</button>
       <div id="folderHint">
-        フォルダ内に以下を入れてください：<br>
-        ・timeline.txt（必須）<br>
-        ・セリフ.txt（必須）<br>
-        ・動画ファイル（*.mp4、複数可）
+        フォルダ内に以下の3ファイルを入れてください：<br>
+        ・battle.mp4（動画）<br>
+        ・timeline.txt（進行データ）<br>
+        ・セリフ.txt（セリフ）
       </div>
     </div>
   </div>
@@ -776,7 +776,7 @@ if (resultSub) {
 if (startButton) startButton.textContent = CONFIG.START_BTN_TEXT;
 
 const gameState = {
-  videoURLs: {},   // ファイル名 → Blob URL
+  videoURL: null,
   parsedTimeline: { stages: {}, defaultSerifs: {}, APPEAR: {}, DEFEAT: {} },
   serifPools: {},
   pleasure: 0, stage: null,
@@ -1053,7 +1053,7 @@ function handleEventSerifs(eventName, actionData) {
   if (heroSerif) setHeroMessage(heroSerif);
 }
 
-/* ===== フォルダ選択による読み込み（複数動画対応） ===== */
+/* ===== フォルダ選択による読み込み ===== */
 function setupFolderSelect() {
   folderSelectButton.onclick = () => {
     const input = document.createElement('input');
@@ -1069,23 +1069,23 @@ function setupFolderSelect() {
         return;
       }
 
+      const videoFile = files.find(f => f.name === 'battle.mp4');
       const timelineFile = files.find(f => f.name === 'timeline.txt');
       const serifFile = files.find(f => f.name === 'セリフ.txt');
-      const videoFiles = files.filter(f => f.name.toLowerCase().endsWith('.mp4'));
 
+      if (!videoFile) { showError("battle.mp4 が見つかりません"); return; }
       if (!timelineFile) { showError("timeline.txt が見つかりません"); return; }
-      if (videoFiles.length === 0) { showError("動画ファイル（*.mp4）が見つかりません"); return; }
 
-      // 既存のBlob URLを全解放
-      Object.values(gameState.videoURLs).forEach(url => {
-        try { URL.revokeObjectURL(url); } catch (err) {}
-      });
-      gameState.videoURLs = {};
+      // 既存のBlob URLを解放
+      if (gameState.videoURL) {
+        URL.revokeObjectURL(gameState.videoURL);
+        gameState.videoURL = null;
+      }
 
-      // 全動画をBlob URL化
-      videoFiles.forEach(f => {
-        gameState.videoURLs[f.name] = URL.createObjectURL(f);
-      });
+      // 動画
+      gameState.videoURL = URL.createObjectURL(videoFile);
+      video.src = gameState.videoURL;
+      video.load();
 
       // timeline.txt
       const timelineText = await timelineFile.text();
@@ -1100,12 +1100,6 @@ function setupFolderSelect() {
         showError("セリフ.txt が見つかりません（セリフなしで進行）");
       }
 
-      // timeline.txt が参照する動画ファイルが全部揃っているか確認
-      const missingVideos = findMissingVideos();
-      if (missingVideos.length > 0) {
-        showError("timeline.txt が参照する動画が不足: " + missingVideos.join(", "));
-      }
-
       // UI切替
       enemySelect.style.display = 'none';
       startButton.style.display = 'block';
@@ -1114,34 +1108,6 @@ function setupFolderSelect() {
 
     input.click();
   };
-}
-
-function findMissingVideos() {
-  const usedFiles = new Set();
-  const timeline = gameState.parsedTimeline;
-
-  function scanActions(actions) {
-    if (!actions) return;
-    actions.forEach(a => {
-      if (a && a.video && a.video.type === 'file' && a.video.file) {
-        usedFiles.add(a.video.file);
-      }
-    });
-  }
-
-  scanActions(timeline.APPEAR && timeline.APPEAR.actions);
-  scanActions(timeline.DEFEAT && timeline.DEFEAT.actions);
-  Object.values(timeline.stages || {}).forEach(stage => {
-    Object.values(stage).forEach(event => {
-      if (event && event.actions) scanActions(event.actions);
-    });
-  });
-
-  const missing = [];
-  usedFiles.forEach(fname => {
-    if (!gameState.videoURLs[fname]) missing.push(fname);
-  });
-  return missing;
 }
 
 function resizeCanvas(){
@@ -1379,6 +1345,7 @@ function playEventVideo(eventData, eventName, onComplete=null) {
       }
     });
 
+    // ★ iOS Safari の順方向シーク対策: seeked イベントを待つ
     const seekTo = (targetTime) => new Promise(resolve => {
       if (Math.abs(video.currentTime - targetTime) < 0.05) {
         resolve();
@@ -1401,78 +1368,79 @@ function playEventVideo(eventData, eventName, onComplete=null) {
       }, 500);
     });
 
-    // ===== 動画URL解決 =====
-    let clipURL = null;
     if (clip.type === 'file') {
-      clipURL = gameState.videoURLs[clip.file];
-      if (!clipURL) {
-        showError(`${clip.file} が見つかりません`);
-        stopContinuousShake();
-        if (onComplete) onComplete();
-        return;
+      // 単一動画方式：URLが変わっていなければそのまま
+      if (video.src !== gameState.videoURL) {
+        video.src = gameState.videoURL;
+        video.load();
+        await waitForLoadedData();
       }
-} else if (clip.type === 'range') {
-  // range形式は battle.mp4 を優先（無ければ最初の動画）
-  clipURL = gameState.videoURLs['battle.mp4'] ||
-    gameState.videoURLs[Object.keys(gameState.videoURLs)[0]];
-  if (!clipURL) {
-    showError("動画が見つかりません");
-    stopContinuousShake();
-    if (onComplete) onComplete();
-    return;
-  }
+      const hasTimeRange = clip.start !== undefined && clip.end !== undefined;
+      video.loop = isLoop && !hasTimeRange;
 
-    // URLが変わった時だけ src を差し替える
-    if (video.dataset.currentURL !== clipURL) {
-      video.src = clipURL;
-      video.dataset.currentURL = clipURL;
-      video.load();
-      await waitForLoadedData();
-    }
+      await seekTo(hasTimeRange ? clip.start : 0);
 
-    const hasTimeRange = clip.start !== undefined && clip.end !== undefined;
-    video.loop = isLoop && !hasTimeRange;
+      applySpeed();
+      video.play().then(() => { applySpeed(); }).catch(() => {
+        setTimeout(() => { playNextAction(); }, holdDuration);
+      });
 
-    await seekTo(hasTimeRange ? clip.start : 0);
-
-    applySpeed();
-    video.play().then(() => { applySpeed(); }).catch(() => {
-      setTimeout(() => { playNextAction(); }, holdDuration);
-    });
-
-    if (hasTimeRange) {
-      const checkRange = () => {
-        if (video.currentTime >= clip.end || video.paused) {
-          video.removeEventListener("timeupdate", checkRange);
-          video.pause();
-          setTimeout(() => {
-            if (isLoop) { video.currentTime = clip.start; video.play().catch(()=>{}); }
-            else { playNextAction(); }
-          }, holdDuration);
-        }
-      };
-      video.addEventListener("timeupdate", checkRange);
-    } else {
-      if (!isLoop) {
-        let endedCalled = false;
-        const handleFinish = () => {
-          if (endedCalled) return;
-          endedCalled = true;
-          video.removeEventListener("ended", handleFinish);
-          video.removeEventListener("timeupdate", checkTime);
-          video.pause();
-          setTimeout(() => { 
-            playNextAction(); 
-          }, holdDuration);
-        };
-        const checkTime = () => {
-          if (video.duration && video.currentTime >= video.duration - 0.15) {
-            handleFinish();
+      if (hasTimeRange) {
+        const checkRange = () => {
+          if (video.currentTime >= clip.end || video.paused) {
+            video.removeEventListener("timeupdate", checkRange);
+            video.pause();
+            setTimeout(() => {
+              if (isLoop) { video.currentTime = clip.start; video.play().catch(()=>{}); }
+              else { playNextAction(); }
+            }, holdDuration);
           }
         };
-        video.addEventListener("ended", handleFinish);
-        video.addEventListener("timeupdate", checkTime);
+        video.addEventListener("timeupdate", checkRange);
+      } else {
+        if (!isLoop) {
+          let endedCalled = false;
+          const handleFinish = () => {
+            if (endedCalled) return;
+            endedCalled = true;
+            video.removeEventListener("ended", handleFinish);
+            video.removeEventListener("timeupdate", checkTime);
+            video.pause();
+            setTimeout(() => { 
+              playNextAction(); 
+            }, holdDuration);
+          };
+          const checkTime = () => {
+            if (video.duration && video.currentTime >= video.duration - 0.15) {
+              handleFinish();
+            }
+          };
+          video.addEventListener("ended", handleFinish);
+          video.addEventListener("timeupdate", checkTime);
+        }
       }
+    } else if (clip.type === 'range') {
+      if (video.src !== gameState.videoURL) {
+        video.src = gameState.videoURL;
+        video.load();
+        await waitForLoadedData();
+      }
+      video.loop = false;
+
+      await seekTo(clip.start);
+
+      applySpeed();
+      video.play().then(() => { applySpeed(); }).catch(() => {
+        setTimeout(() => { playNextAction(); }, holdDuration);
+      });
+
+      const check = () => { 
+        if (video.currentTime >= clip.end || video.paused) { 
+          video.removeEventListener("timeupdate", check); video.pause();
+          setTimeout(() => { if (!isLoop) playNextAction(); }, holdDuration);
+        } 
+      };
+      video.addEventListener("timeupdate", check);
     }
   }
   playNextAction();
