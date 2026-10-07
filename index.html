@@ -625,7 +625,7 @@ html,body{width:100%;height:100%;background:#020005;color:#f0d0e8;font-family:'R
           <div id="mainGaugeFill"></div>
           <div class="gauge-label-wrap">
             <div class="gauge-title-group">
-              <span class="gauge-title" id="gaugeTitleLabel">理性</span><span id="stageHearts">☠️</span>
+              <span class="gauge-title">理性</span><span id="stageHearts">☠️</span>
             </div>
             <span id="gaugePercent">100%</span>
           </div>
@@ -651,13 +651,12 @@ html,body{width:100%;height:100%;background:#020005;color:#f0d0e8;font-family:'R
       <div id="enemySelectTitle">📁 敵フォルダを選択 📁</div>
       <button id="folderSelectButton">📁 フォルダを選択</button>
       <div id="folderHint">
-        フォルダ内に以下のファイルを入れてください：<br>
-        ・battle.mp4（動画）<br>
+        フォルダ内に以下を入れてください：<br>
+        ・battle.mp4（動画・複数可）<br>
         ・timeline.txt（進行データ）<br>
         ・セリフ.txt（セリフ）<br>
-        ・擬音.txt（任意）<br>
-        ・config.txt（任意）<br>
-        ・chara.png（任意）
+        ・chara.png（主人公画像・任意）<br>
+        ・擬音.txt（擬音・任意）
       </div>
     </div>
   </div>
@@ -666,7 +665,7 @@ html,body{width:100%;height:100%;background:#020005;color:#f0d0e8;font-family:'R
 <script>
 "use strict";
 
-const DEFAULT_CONFIG = {
+const CONFIG = {
   MAX_PLEASURE: 100,
   PASSIVE_AMOUNT: 1,
   PASSIVE_INTERVAL: 2500,
@@ -703,177 +702,29 @@ const DEFAULT_CONFIG = {
   GAZE_DURATION_MS: 2200,
   ONO_LIFETIME_MS: 1300,
   ONO_STAGGER_MS: 110,
-  SFX_TEXTS_ATTACK: ["くちゅくちゅ…♡","ビクッ！","ああっ…♡"],
-  SFX_TEXTS_DEFEAT: ["ドピュッ…♡","くちゅくちゅ…♡","じゅっぽり…♡","搾り取られるぅ…♡","あぁぁっ♡","ぬちゅ…♡","ビクビクッ！"],
+  SFX_TEXTS_ATTACK: [
+    "",
+    "",
+    ""
+  ],
+  SFX_TEXTS_DEFEAT: [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    ""
+  ],
   SFX_TEXT_PLEASURE_UP:   "+10 侵食",
   SFX_TEXT_PLEASURE_DOWN: "-10 侵食",
+  SFX_TEXT_PLEASURE_FORMAT: (sign, val) => `${sign}${val}`,
   DEFEAT_TITLE: '侵食完了',
   DEFEAT_SUB: '',
   START_BTN_TEXT: '▶ 侵蝕開始',
-  GAUGE_TITLE: '理性',
-  CHARA_IMAGE: 'chara/chara.png',
-  /* レイアウト系（CSS変数に反映） */
-  AVATAR_SIZE: '96px',
-  AVATAR_LEFT: '12px',
-  AVATAR_BOTTOM: '10px',
-  GAUGE_BOTTOM: '86px',
-  HERO_SERIF_HEIGHT: '76px',
-  VIDEO_OFFSET_Y: '50px',
-  /* 色（CSS変数に反映） */
-  BG_COLOR: null,
-  HERO_SERIF_COLOR: null,
-  HERO_SERIF_BORDER: null,
-  ENEMY_SERIF_COLOR: null,
-  SYSTEM_ACCENT: null,
-  /* フォント（CSS変数に反映） */
-  FONT_ENEMY: null,
-  FONT_HERO: null,
-  FONT_BTN: null,
-  FONT_TIMER: null,
-  /* 文字サイズ（CSS変数に反映） */
-  ENEMY_SERIF_SIZE: null,
-  HERO_SERIF_SIZE: null,
-  BTN_TEXT_SIZE: null,
-  GAUGE_TITLE_SIZE: null,
-  GAUGE_PERCENT_SIZE: null
+  CHARA_IMAGE: 'chara/chara.png'
 };
 
-const CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-
-function applyConfigToCSS() {
-  const root = document.documentElement;
-  const map = {
-    AVATAR_SIZE: '--avatar-size',
-    AVATAR_LEFT: '--avatar-left',
-    AVATAR_BOTTOM: '--avatar-bottom',
-    GAUGE_BOTTOM: '--gauge-bottom',
-    HERO_SERIF_HEIGHT: '--hero-serif-height',
-    VIDEO_OFFSET_Y: '--video-offset-y',
-    HERO_SERIF_COLOR: '--hero-serif-color',
-    HERO_SERIF_BORDER: '--hero-serif-border',
-    ENEMY_SERIF_COLOR: '--enemy-serif-color',
-    SYSTEM_ACCENT: '--system-accent',
-    FONT_ENEMY: '--font-enemy',
-    FONT_HERO: '--font-hero',
-    FONT_BTN: '--font-btn',
-    FONT_TIMER: '--font-timer',
-    ENEMY_SERIF_SIZE: '--enemy-serif-size',
-    HERO_SERIF_SIZE: '--hero-serif-size',
-    BTN_TEXT_SIZE: '--btn-text-size',
-    GAUGE_TITLE_SIZE: '--gauge-title-size',
-    GAUGE_PERCENT_SIZE: '--gauge-percent-size'
-  };
-  for (const key in map) {
-    if (CONFIG[key] !== null && CONFIG[key] !== undefined && CONFIG[key] !== '') {
-      root.style.setProperty(map[key], CONFIG[key]);
-    }
-  }
-}
-
-function parseConfigFile(text) {
-  if (!text) return {};
-  const result = {};
-  const lines = text.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line || line.startsWith('#')) continue;
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) continue;
-    const key = line.slice(0, colonIdx).trim();
-    const val = line.slice(colonIdx + 1).trim();
-    if (!key) continue;
-    result[key] = val;
-  }
-  return result;
-}
-
-function applyConfigObject(obj) {
-  for (const key in obj) {
-    if (!(key in DEFAULT_CONFIG)) continue;
-    const defVal = DEFAULT_CONFIG[key];
-    const rawVal = obj[key];
-
-    // 数値系
-    if (typeof defVal === 'number') {
-      const num = parseFloat(rawVal);
-      if (!isNaN(num)) CONFIG[key] = num;
-      continue;
-    }
-    // 文字列・null系
-    CONFIG[key] = rawVal;
-  }
-  // STAGE_THRESHOLDS だけ個別対応
-  if (obj.STAGE2_THRESHOLD !== undefined) {
-    const n = parseFloat(obj.STAGE2_THRESHOLD);
-    if (!isNaN(n)) CONFIG.STAGE_THRESHOLDS.stage2 = n;
-  }
-  if (obj.STAGE3_THRESHOLD !== undefined) {
-    const n = parseFloat(obj.STAGE3_THRESHOLD);
-    if (!isNaN(n)) CONFIG.STAGE_THRESHOLDS.stage3 = n;
-  }
-  if (obj.STAGE4_THRESHOLD !== undefined) {
-    const n = parseFloat(obj.STAGE4_THRESHOLD);
-    if (!isNaN(n)) CONFIG.STAGE_THRESHOLDS.stage4 = n;
-  }
-  applyConfigToCSS();
-}
-
-function resetConfig() {
-  const fresh = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  for (const key in fresh) {
-    CONFIG[key] = fresh[key];
-  }
-  CONFIG.STAGE_THRESHOLDS = fresh.STAGE_THRESHOLDS;
-}
-
-/* ===== グローバルゲーム状態 ===== */
-const gameState = {
-  videoURL: null,
-  charaURL: null,
-  parsedTimeline: { stages: {}, defaultSerifs: {}, APPEAR: {}, DEFEAT: {} },
-  serifPools: {},
-  sfxPools: {},
-  pleasure: 0, stage: null,
-  battleStarted: false, battleEnded: false,
-  currentClip: null, isGazing: false, gazeStart: 0, guardUntil: 0,
-  enemyTimer: null, passiveTimer: null, defeatLoopTimer: null,
-  nextAttackTime: 0, attackTimerInterval: null,
-  countdownValue: 0, countdownToken: 0, crisisMode: false,
-  msgTimer: null, typewriterTimer: null,
-  heroMsgTimer: null, heroTypewriterTimer: null
-};
-
-function getSfxPool(tag) {
-  if (!gameState.sfxPools) return [];
-  let pool = gameState.sfxPools[tag];
-  if (!pool) {
-    const keys = Object.keys(gameState.sfxPools);
-    const bestKey = keys.find(k => k.includes(tag) || tag.includes(k));
-    if (bestKey) pool = gameState.sfxPools[bestKey];
-  }
-  return pool || [];
-}
-
-function parseSfxFile(text) {
-  const pools = {};
-  if (!text) return pools;
-  const lines = text.split('\n');
-  let currentTag = null;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    if (line.startsWith('#')) {
-      currentTag = line.slice(1).trim();
-      if (currentTag && !pools[currentTag]) pools[currentTag] = [];
-      continue;
-    }
-    if (!currentTag) continue;
-    pools[currentTag].push(line);
-  }
-  return pools;
-}
-
-/* ===== DOM ===== */
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const video = document.getElementById("video");
@@ -918,18 +769,29 @@ const title3 = document.getElementById("title3");
 
 const resultTitle = document.getElementById("resultTitle");
 const resultSub = document.getElementById("resultSub");
-const gaugeTitleLabel = document.getElementById("gaugeTitleLabel");
 
-function applyStartUI() {
-  if (resultTitle) resultTitle.textContent = CONFIG.DEFEAT_TITLE;
-  if (resultSub) {
-    resultSub.textContent = CONFIG.DEFEAT_SUB;
-    resultSub.style.display = CONFIG.DEFEAT_SUB ? 'block' : 'none';
-  }
-  if (startButton) startButton.textContent = CONFIG.START_BTN_TEXT;
-  if (gaugeTitleLabel) gaugeTitleLabel.textContent = CONFIG.GAUGE_TITLE;
+if (resultTitle) resultTitle.textContent = CONFIG.DEFEAT_TITLE;
+if (resultSub) {
+  resultSub.textContent = CONFIG.DEFEAT_SUB;
+  resultSub.style.display = CONFIG.DEFEAT_SUB ? 'block' : 'none';
 }
-applyStartUI();
+if (startButton) startButton.textContent = CONFIG.START_BTN_TEXT;
+
+const gameState = {
+  videoURLs: {},
+  charaURL: null,
+  sfxTexts: { attack: null, defeat: null },
+  parsedTimeline: { stages: {}, defaultSerifs: {}, APPEAR: {}, DEFEAT: {} },
+  serifPools: {},
+  pleasure: 0, stage: null,
+  battleStarted: false, battleEnded: false,
+  currentClip: null, isGazing: false, gazeStart: 0, guardUntil: 0,
+  enemyTimer: null, passiveTimer: null, defeatLoopTimer: null,
+  nextAttackTime: 0, attackTimerInterval: null,
+  countdownValue: 0, countdownToken: 0, crisisMode: false,
+  msgTimer: null, typewriterTimer: null,
+  heroMsgTimer: null, heroTypewriterTimer: null
+};
 
 function showError(msg) {
   errorDisplay.textContent = msg;
@@ -987,6 +849,33 @@ function parseSerifFile(text) {
   }
   pushEntry();
   return pools;
+}
+
+function parseSfxFile(text) {
+  const data = { attack: null, defeat: null };
+  if (!text) return data;
+  const lines = text.split('\n');
+  let currentSection = null;
+  const attackList = [];
+  const defeatList = [];
+
+  lines.forEach(rawLine => {
+    const line = rawLine.trim();
+    if (!line) return;
+    if (line.startsWith('#')) {
+      const tag = line.slice(1).trim().toUpperCase();
+      if (tag === 'ATTACK') currentSection = 'attack';
+      else if (tag === 'DEFEAT') currentSection = 'defeat';
+      else currentSection = null;
+      return;
+    }
+    if (currentSection === 'attack') attackList.push(line);
+    else if (currentSection === 'defeat') defeatList.push(line);
+  });
+
+  if (attackList.length > 0) data.attack = attackList;
+  if (defeatList.length > 0) data.defeat = defeatList;
+  return data;
 }
 
 function parseNewTimeline(text) {
@@ -1195,7 +1084,7 @@ function handleEventSerifs(eventName, actionData) {
   if (heroSerif) setHeroMessage(heroSerif);
 }
 
-/* ===== フォルダ選択 ===== */
+/* ===== フォルダ選択による読み込み ===== */
 function setupFolderSelect() {
   folderSelectButton.onclick = () => {
     const input = document.createElement('input');
@@ -1211,34 +1100,25 @@ function setupFolderSelect() {
         return;
       }
 
-      const videoFile = files.find(f => f.name === 'battle.mp4');
       const timelineFile = files.find(f => f.name === 'timeline.txt');
       const serifFile = files.find(f => f.name === 'セリフ.txt');
+      const charaFile = files.find(f => f.name === 'chara.png');
       const sfxFile = files.find(f => f.name === '擬音.txt');
-      const configFile = files.find(f => f.name === 'config.txt');
+      const videoFiles = files.filter(f => f.name.toLowerCase().endsWith('.mp4'));
 
-      if (!videoFile) { showError("battle.mp4 が見つかりません"); return; }
       if (!timelineFile) { showError("timeline.txt が見つかりません"); return; }
+      if (videoFiles.length === 0) { showError("動画ファイル（*.mp4）が見つかりません"); return; }
 
-      // config をリセットしてから適用
-      resetConfig();
-      if (configFile) {
-        const configText = await configFile.text();
-        const parsed = parseConfigFile(configText);
-        applyConfigObject(parsed);
-      }
-      applyStartUI();
+      // 既存のBlob URLを全解放
+      Object.values(gameState.videoURLs).forEach(url => {
+        try { URL.revokeObjectURL(url); } catch (err) {}
+      });
+      gameState.videoURLs = {};
 
-      // 既存のBlob URLを解放
-      if (gameState.videoURL) {
-        URL.revokeObjectURL(gameState.videoURL);
-        gameState.videoURL = null;
-      }
-
-      // 動画
-      gameState.videoURL = URL.createObjectURL(videoFile);
-      video.src = gameState.videoURL;
-      video.load();
+      // 全動画をBlob URL化
+      videoFiles.forEach(f => {
+        gameState.videoURLs[f.name] = URL.createObjectURL(f);
+      });
 
       // timeline.txt
       const timelineText = await timelineFile.text();
@@ -1253,16 +1133,15 @@ function setupFolderSelect() {
         showError("セリフ.txt が見つかりません（セリフなしで進行）");
       }
 
-      // 擬音.txt
+      // 擬音.txt（任意）
       if (sfxFile) {
         const sfxText = await sfxFile.text();
-        gameState.sfxPools = parseSfxFile(sfxText);
+        gameState.sfxTexts = parseSfxFile(sfxText);
       } else {
-        gameState.sfxPools = {};
+        gameState.sfxTexts = { attack: null, defeat: null };
       }
 
       // chara.png（任意）
-      const charaFile = files.find(f => f.name === 'chara.png');
       if (charaFile) {
         if (gameState.charaURL) {
           try { URL.revokeObjectURL(gameState.charaURL); } catch (err) {}
@@ -1277,6 +1156,12 @@ function setupFolderSelect() {
         heroAvatarSprite.style.backgroundImage = 'none';
       }
 
+      // 不足動画チェック
+      const missingVideos = findMissingVideos();
+      if (missingVideos.length > 0) {
+        showError("timeline.txt が参照する動画が不足: " + missingVideos.join(", "));
+      }
+
       // UI切替
       enemySelect.style.display = 'none';
       startButton.style.display = 'block';
@@ -1285,6 +1170,34 @@ function setupFolderSelect() {
 
     input.click();
   };
+}
+
+function findMissingVideos() {
+  const usedFiles = new Set();
+  const timeline = gameState.parsedTimeline;
+
+  function scanActions(actions) {
+    if (!actions) return;
+    actions.forEach(a => {
+      if (a && a.video && a.video.type === 'file' && a.video.file) {
+        usedFiles.add(a.video.file);
+      }
+    });
+  }
+
+  scanActions(timeline.APPEAR && timeline.APPEAR.actions);
+  scanActions(timeline.DEFEAT && timeline.DEFEAT.actions);
+  Object.values(timeline.stages || {}).forEach(stage => {
+    Object.values(stage).forEach(event => {
+      if (event && event.actions) scanActions(event.actions);
+    });
+  });
+
+  const missing = [];
+  usedFiles.forEach(fname => {
+    if (!gameState.videoURLs[fname]) missing.push(fname);
+  });
+  return missing;
 }
 
 function resizeCanvas(){
@@ -1372,6 +1285,8 @@ function typeWriterHeroMessage(text, speed = CONFIG.HERO_TYPE_SPEED) {
 
 function setMessage(text){ typeWriterMessage(text, CONFIG.ENEMY_TYPE_SPEED); }
 function setHeroMessage(text){ typeWriterHeroMessage(text, CONFIG.HERO_TYPE_SPEED); }
+
+function initHeroAvatarImage() { heroAvatarSprite.style.backgroundImage = `url("${CONFIG.CHARA_IMAGE}")`; }
 
 function getCurrentStageLevel() {
   const pct = gameState.pleasure / CONFIG.MAX_PLEASURE;
@@ -1488,14 +1403,11 @@ function playEventVideo(eventData, eventName, onComplete=null) {
     }
 
     const sfx = currentAction.sfxCount !== undefined ? currentAction.sfxCount : (actionIndex === 1 && eventData.sfxCount !== undefined ? eventData.sfxCount : 0);
-    const attackPool = getSfxPool('攻撃');
-    if (sfx > 0 && attackPool.length > 0) {
-      for (let i = 0; i < sfx; i++) {
-        setTimeout(() => {
-          doFlash(true); triggerShockwave();
-          showMultipleOno(attackPool, 1 + i * 0.3);
-        }, i * CONFIG.SFX_STAGGER_MS);
-      }
+    for (let i = 0; i < sfx; i++) {
+      setTimeout(() => {
+        doFlash(true); triggerShockwave();
+        showMultipleOno(gameState.sfxTexts.attack || CONFIG.SFX_TEXTS_ATTACK, 1 + i * 0.3);
+      }, i * CONFIG.SFX_STAGGER_MS);
     }
 
     handleEventSerifs(eventName, currentAction);
@@ -1545,78 +1457,77 @@ function playEventVideo(eventData, eventName, onComplete=null) {
       }, 500);
     });
 
+    // ===== 動画URL解決 =====
+    let clipURL = null;
     if (clip.type === 'file') {
-      if (video.src !== gameState.videoURL) {
-        video.src = gameState.videoURL;
-        video.load();
-        await waitForLoadedData();
-      }
-      const hasTimeRange = clip.start !== undefined && clip.end !== undefined;
-      video.loop = isLoop && !hasTimeRange;
-
-      await seekTo(hasTimeRange ? clip.start : 0);
-
-      applySpeed();
-      video.play().then(() => { applySpeed(); }).catch(() => {
-        setTimeout(() => { playNextAction(); }, holdDuration);
-      });
-
-      if (hasTimeRange) {
-        const checkRange = () => {
-          if (video.currentTime >= clip.end || video.paused) {
-            video.removeEventListener("timeupdate", checkRange);
-            video.pause();
-            setTimeout(() => {
-              if (isLoop) { video.currentTime = clip.start; video.play().catch(()=>{}); }
-              else { playNextAction(); }
-            }, holdDuration);
-          }
-        };
-        video.addEventListener("timeupdate", checkRange);
-      } else {
-        if (!isLoop) {
-          let endedCalled = false;
-          const handleFinish = () => {
-            if (endedCalled) return;
-            endedCalled = true;
-            video.removeEventListener("ended", handleFinish);
-            video.removeEventListener("timeupdate", checkTime);
-            video.pause();
-            setTimeout(() => { 
-              playNextAction(); 
-            }, holdDuration);
-          };
-          const checkTime = () => {
-            if (video.duration && video.currentTime >= video.duration - 0.15) {
-              handleFinish();
-            }
-          };
-          video.addEventListener("ended", handleFinish);
-          video.addEventListener("timeupdate", checkTime);
-        }
+      clipURL = gameState.videoURLs[clip.file];
+      if (!clipURL) {
+        showError(`${clip.file} が見つかりません`);
+        stopContinuousShake();
+        if (onComplete) onComplete();
+        return;
       }
     } else if (clip.type === 'range') {
-      if (video.src !== gameState.videoURL) {
-        video.src = gameState.videoURL;
-        video.load();
-        await waitForLoadedData();
+      clipURL = gameState.videoURLs['battle.mp4'] 
+             || gameState.videoURLs[Object.keys(gameState.videoURLs)[0]];
+      if (!clipURL) {
+        showError("動画が見つかりません");
+        stopContinuousShake();
+        if (onComplete) onComplete();
+        return;
       }
-      video.loop = false;
+    }
 
-      await seekTo(clip.start);
+    if (video.dataset.currentURL !== clipURL) {
+      video.src = clipURL;
+      video.dataset.currentURL = clipURL;
+      video.load();
+      await waitForLoadedData();
+    }
 
-      applySpeed();
-      video.play().then(() => { applySpeed(); }).catch(() => {
-        setTimeout(() => { playNextAction(); }, holdDuration);
-      });
+    const hasTimeRange = clip.start !== undefined && clip.end !== undefined;
+    video.loop = isLoop && !hasTimeRange;
 
-      const check = () => { 
-        if (video.currentTime >= clip.end || video.paused) { 
-          video.removeEventListener("timeupdate", check); video.pause();
-          setTimeout(() => { if (!isLoop) playNextAction(); }, holdDuration);
-        } 
+    await seekTo(hasTimeRange ? clip.start : 0);
+
+    applySpeed();
+    video.play().then(() => { applySpeed(); }).catch(() => {
+      setTimeout(() => { playNextAction(); }, holdDuration);
+    });
+
+    if (hasTimeRange) {
+      const checkRange = () => {
+        if (video.currentTime >= clip.end || video.paused) {
+          video.removeEventListener("timeupdate", checkRange);
+          video.pause();
+          setTimeout(() => {
+            if (isLoop) { video.currentTime = clip.start; video.play().catch(()=>{}); }
+            else { playNextAction(); }
+          }, holdDuration);
+        }
       };
-      video.addEventListener("timeupdate", check);
+      video.addEventListener("timeupdate", checkRange);
+    } else {
+      if (!isLoop) {
+        let endedCalled = false;
+        const handleFinish = () => {
+          if (endedCalled) return;
+          endedCalled = true;
+          video.removeEventListener("ended", handleFinish);
+          video.removeEventListener("timeupdate", checkTime);
+          video.pause();
+          setTimeout(() => { 
+            playNextAction(); 
+          }, holdDuration);
+        };
+        const checkTime = () => {
+          if (video.duration && video.currentTime >= video.duration - 0.15) {
+            handleFinish();
+          }
+        };
+        video.addEventListener("ended", handleFinish);
+        video.addEventListener("timeupdate", checkTime);
+      }
     }
   }
   playNextAction();
@@ -1881,13 +1792,11 @@ function defeat(){
     continueLoop();
   }
 
-  const defeatPool = getSfxPool('敗北');
-  const pool = defeatPool.length > 0 ? defeatPool : [];
+  const pool = gameState.sfxTexts.defeat || CONFIG.SFX_TEXTS_DEFEAT;
   let idx = 0;
   const targetCount = defeatEvent && defeatEvent.sfxCount !== undefined ? defeatEvent.sfxCount : CONFIG.DEFEAT_SFX_DEFAULT;
   gameState.defeatLoopTimer = setInterval(()=>{
     if(!gameState.battleEnded) return;
-    if (pool.length === 0) return;
     const intensity = 1.2 + (idx % targetCount) * 0.25;
     showMultipleOno([pool[Math.floor(Math.random()*pool.length)],pool[Math.floor(Math.random()*pool.length)]], intensity);
     doFlash(false); triggerShockwave();
