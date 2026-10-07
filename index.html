@@ -776,7 +776,8 @@ if (resultSub) {
 if (startButton) startButton.textContent = CONFIG.START_BTN_TEXT;
 
 const gameState = {
-  videoURL: null,
+videoURL: null,
+  charaURL: null,
   parsedTimeline: { stages: {}, defaultSerifs: {}, APPEAR: {}, DEFEAT: {} },
   serifPools: {},
   pleasure: 0, stage: null,
@@ -1098,6 +1099,21 @@ function setupFolderSelect() {
       } else {
         gameState.serifPools = {};
         showError("セリフ.txt が見つかりません（セリフなしで進行）");
+      }
+// chara.png（任意）
+      const charaFile = files.find(f => f.name === 'chara.png');
+      if (charaFile) {
+        if (gameState.charaURL) {
+          try { URL.revokeObjectURL(gameState.charaURL); } catch (err) {}
+        }
+        gameState.charaURL = URL.createObjectURL(charaFile);
+        heroAvatarSprite.style.backgroundImage = `url("${gameState.charaURL}")`;
+      } else {
+        if (gameState.charaURL) {
+          try { URL.revokeObjectURL(gameState.charaURL); } catch (err) {}
+          gameState.charaURL = null;
+        }
+        heroAvatarSprite.style.backgroundImage = 'none';
       }
 
       // UI切替
@@ -1748,7 +1764,6 @@ function startBattle(){
 resultOverlay.onclick = null;
 startButton.onclick = startBattle;
 setupFolderSelect();
-initHeroAvatarImage();
 updateHeroAvatar();
 </script>
 </body>
