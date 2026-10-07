@@ -584,6 +584,7 @@ html,body{width:100%;height:100%;background:#020005;color:#f0d0e8;font-family:'R
   box-shadow: 0 0 10px rgba(0,0,0,0.5);
 }
 </style>
+<style id="dynamicStyle"></style>
 </head>
 <body>
 <div id="game">
@@ -1140,6 +1141,19 @@ function setupFolderSelect() {
       } else {
         gameState.sfxTexts = { attack: null, defeat: null };
       }
+
+// style.css（任意）敵ごとの見た目上書き
+      const styleFile = files.find(f => f.name === 'style.css');
+      const dynamicStyleEl = document.getElementById('dynamicStyle');
+      if (dynamicStyleEl) {
+        if (styleFile) {
+          const cssText = await styleFile.text();
+          dynamicStyleEl.textContent = cssText;
+        } else {
+          dynamicStyleEl.textContent = '';
+        }
+      }
+
 
       // chara.png（任意）
       if (charaFile) {
